@@ -492,7 +492,7 @@ export class RelayRoom {
       return;
     }
 
-    if (data.type === 'token') {
+    if (data.type === 'token' || data.type === 'TOKEN_TRANSFER') {
       if (meta.role !== 'provider') {
         this.sendJson(ws, {
           type: 'system',
