@@ -36,6 +36,11 @@ const JSON_HEADERS = {
   'cache-control': 'no-store',
 };
 
+const normalizePathname = (pathname: string): string => {
+  const normalized = pathname.replace(/\/{2,}/g, '/').replace(/\/+$/, '');
+  return normalized || '/';
+};
+
 function withCors(headers?: HeadersInit): Headers {
   const next = new Headers(headers);
   next.set('Access-Control-Allow-Origin', '*');
@@ -53,7 +58,24 @@ function json(data: unknown, status = 200): Response {
 
 function parseCode(url: URL): string {
   const raw = (url.searchParams.get('code') || '').trim();
-  return ROOM_CODE_RE.test(raw) ? raw : '';
+  if (ROOM_CODE_RE.test(raw)) return raw;
+
+  const pathname = normalizePathname(url.pathname);
+  const patterns = [
+    /^\/(\d{4,8})$/,
+    /^\/(?:room|ws|connect)\/(\d{4,8})$/,
+    /^\/(?:publish-token|stats)\/(\d{4,8})$/,
+    /^\/(\d{4,8})\/(?:publish-token|stats)$/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = pathname.match(pattern);
+    if (match?.[1] && ROOM_CODE_RE.test(match[1])) {
+      return match[1];
+    }
+  }
+
+  return '';
 }
 
 function parseRole(url: URL): RelayRole | null {
@@ -142,12 +164,13 @@ async function forwardRoomRequest(
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const pathname = normalizePathname(url.pathname);
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: withCors() });
     }
 
-    if (url.pathname === '/health') {
+    if (pathname === '/health') {
       return json({
         ok: true,
         service: 'proxymid',
@@ -157,9 +180,14 @@ export default {
 
     const code = parseCode(url);
 
-    if (url.pathname === '/publish-token') {
+    const isPublishRoute =
+      pathname === '/publish-token' ||
+      /^\/publish-token\/\d{4,8}$/.test(pathname) ||
+      /^\/\d{4,8}\/publish-token$/.test(pathname);
+
+    if (isPublishRoute) {
       if (request.method !== 'POST') {
-        return json({ ok: false, error: 'Use POST /publish-token?code=1234' }, 405);
+        return json({ ok: false, error: 'Use POST /publish-token/1234 or POST /1234/publish-token' }, 405);
       }
       if (!code) {
         return json({ ok: false, error: 'Invalid or missing code. Expected 4-8 digits.' }, 400);
@@ -186,21 +214,35 @@ export default {
       });
     }
 
-    if (url.pathname === '/stats') {
+    const isStatsRoute =
+      pathname === '/stats' ||
+      /^\/stats\/\d{4,8}$/.test(pathname) ||
+      /^\/\d{4,8}\/stats$/.test(pathname);
+
+    if (isStatsRoute) {
       if (!code) {
         return json({ ok: false, error: 'Missing code.' }, 400);
       }
       return forwardRoomRequest(env, code, '/stats');
     }
 
-    if (url.pathname === '/' || url.pathname === '/ws' || url.pathname === '/connect') {
+    const isConnectRoute =
+      pathname === '/' ||
+      pathname === '/ws' ||
+      pathname === '/connect' ||
+      /^\/\d{4,8}$/.test(pathname) ||
+      /^\/(?:room|ws|connect)\/\d{4,8}$/.test(pathname);
+
+    if (isConnectRoute) {
       if (!code) {
         return json(
           {
             ok: false,
-            error: 'Missing or invalid code. Use ?code=1234',
-            examplePublish: '/publish-token?code=1234',
-            exampleWebSocket: 'wss://<your-worker-domain>/?code=1234',
+            error: 'Missing or invalid code. Use /1234 or ?code=1234',
+            exampleRoom: '/1234',
+            examplePublish: '/publish-token/1234',
+            examplePublishAlt: '/1234/publish-token',
+            exampleWebSocket: 'wss://<your-worker-domain>/1234',
           },
           400,
         );
@@ -210,8 +252,12 @@ export default {
         return json({
           ok: true,
           code,
-          connect: `wss://${url.host}/?code=${code}`,
-          publish: `https://${url.host}/publish-token?code=${code}`,
+          room: `https://${url.host}/${code}`,
+          connect: `wss://${url.host}/${code}`,
+          connectLegacy: `wss://${url.host}/?code=${code}`,
+          publish: `https://${url.host}/publish-token/${code}`,
+          publishAlt: `https://${url.host}/${code}/publish-token`,
+          stats: `https://${url.host}/stats/${code}`,
         });
       }
 
@@ -223,9 +269,12 @@ export default {
         ok: true,
         name: 'proxymid',
         health: '/health',
-        websocket: '/?code=1234',
-        publish: '/publish-token?code=1234',
-        stats: '/stats?code=1234',
+        room: '/1234',
+        websocket: '/1234',
+        websocketLegacy: '/?code=1234',
+        publish: '/publish-token/1234',
+        publishAlt: '/1234/publish-token',
+        stats: '/stats/1234',
       },
       200,
     );
