@@ -63,9 +63,11 @@ function parseCode(url: URL): string {
   const pathname = normalizePathname(url.pathname);
   const patterns = [
     /^\/(\d{4,8})$/,
+    /^\/code=(\d{4,8})$/,
     /^\/(?:room|ws|connect)\/(\d{4,8})$/,
     /^\/(?:publish-token|stats)\/(\d{4,8})$/,
     /^\/(\d{4,8})\/(?:publish-token|stats)$/,
+    /^\/code=(\d{4,8})\/(?:publish-token|stats)$/,
   ];
 
   for (const pattern of patterns) {
@@ -216,6 +218,7 @@ export default {
 
     const isStatsRoute =
       pathname === '/stats' ||
+      /^\/code=\d{4,8}\/stats$/.test(pathname) ||
       /^\/stats\/\d{4,8}$/.test(pathname) ||
       /^\/\d{4,8}\/stats$/.test(pathname);
 
@@ -230,6 +233,7 @@ export default {
       pathname === '/' ||
       pathname === '/ws' ||
       pathname === '/connect' ||
+      /^\/code=\d{4,8}$/.test(pathname) ||
       /^\/\d{4,8}$/.test(pathname) ||
       /^\/(?:room|ws|connect)\/\d{4,8}$/.test(pathname);
 
