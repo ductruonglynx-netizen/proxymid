@@ -108,6 +108,10 @@ Neu ban muon doc ma phong truc tiep tu link dang `https://proxymid.ductruong-lyn
 const roomCode = window.location.pathname.split('/').filter(Boolean)[0] || '';
 ```
 
+Neu ban muon mot ban mau day du co giao dien nho de test va debug, xem:
+
+- `examples/ai-studio-room-publisher.html`
+
 ## Vi du tich hop TruyenForge
 
 Trong `truyentudoapp`, dat:

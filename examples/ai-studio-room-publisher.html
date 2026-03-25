@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Studio Room Publisher</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f172a;
+        --panel: rgba(15, 23, 42, 0.88);
+        --border: rgba(148, 163, 184, 0.22);
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #22c55e;
+        --danger: #fb7185;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(34, 197, 94, 0.16), transparent 38%),
+          linear-gradient(180deg, #020617 0%, #0f172a 100%);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .card {
+        width: min(720px, 100%);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+        padding: 24px;
+        backdrop-filter: blur(14px);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+
+      p {
+        margin: 0 0 16px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 14px;
+      }
+
+      input,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.72);
+        color: var(--text);
+        padding: 12px 14px;
+      }
+
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        background: var(--accent);
+        color: #052e16;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: rgba(148, 163, 184, 0.18);
+        color: var(--text);
+      }
+
+      .status {
+        margin-top: 16px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.48);
+        white-space: pre-wrap;
+      }
+
+      .status.error {
+        border-color: rgba(251, 113, 133, 0.4);
+        color: #fecdd3;
+      }
+
+      .status.ok {
+        border-color: rgba(34, 197, 94, 0.4);
+        color: #dcfce7;
+      }
+
+      code {
+        color: #bbf7d0;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>AI Studio -> Proxymid</h1>
+      <p>
+        Trang nay tu doc room code tu URL dang <code>/1234</code>, tim token tu bien toan cuc
+        hoac o nhap, sau do POST len Proxymid.
+      </p>
+
+      <div class="grid">
+        <label>
+          Worker base
+          <input id="workerBase" value="https://proxymid.ductruong-lynx.workers.dev" />
+        </label>
+
+        <label>
+          Room code
+          <input id="roomCode" />
+        </label>
+
+        <label>
+          Relay secret (neu worker co bat)
+          <input id="relaySecret" placeholder="optional" />
+        </label>
+
+        <label>
+          Token
+          <textarea id="tokenInput" placeholder="De trong neu app AI Studio da co window.aiToken, window.AI_TOKEN hoac localStorage ai_token"></textarea>
+        </label>
+      </div>
+
+      <div class="row" style="margin-top: 16px">
+        <button id="publishBtn">Publish token</button>
+        <button id="autoBtn" class="secondary">Auto publish moi 45 giay</button>
+      </div>
+
+      <div id="status" class="status">Dang khoi tao...</div>
+    </main>
+
+    <script>
+      const workerBaseInput = document.getElementById('workerBase');
+      const roomCodeInput = document.getElementById('roomCode');
+      const relaySecretInput = document.getElementById('relaySecret');
+      const tokenInput = document.getElementById('tokenInput');
+      const publishBtn = document.getElementById('publishBtn');
+      const autoBtn = document.getElementById('autoBtn');
+      const statusBox = document.getElementById('status');
+
+      let autoTimer = null;
+
+      function getRoomCodeFromUrl() {
+        const segments = window.location.pathname.split('/').filter(Boolean);
+        const first = segments[0] || '';
+        return /^\d{4,8}$/.test(first) ? first : '';
+      }
+
+      function setStatus(message, kind = '') {
+        statusBox.textContent = message;
+        statusBox.className = `status ${kind}`.trim();
+      }
+
+      function findToken() {
+        const manual = tokenInput.value.trim();
+        if (manual) return manual.replace(/^Bearer\s+/i, '').trim();
+
+        const globals = [
+          window.aiToken,
+          window.AI_TOKEN,
+          window.accessToken,
+          window.ACCESS_TOKEN,
+          window.apiKey,
+          window.API_KEY,
+        ];
+
+        for (const candidate of globals) {
+          const token = String(candidate || '').replace(/^Bearer\s+/i, '').trim();
+          if (token) return token;
+        }
+
+        const storageKeys = ['ai_token', 'access_token', 'api_key'];
+        for (const key of storageKeys) {
+          const token = String(window.localStorage.getItem(key) || '').replace(/^Bearer\s+/i, '').trim();
+          if (token) return token;
+        }
+
+        return '';
+      }
+
+      async function publishToken() {
+        const workerBase = workerBaseInput.value.trim().replace(/\/+$/, '');
+        const roomCode = roomCodeInput.value.trim();
+        const token = findToken();
+        const relaySecret = relaySecretInput.value.trim();
+
+        if (!/^\d{4,8}$/.test(roomCode)) {
+          setStatus('Khong tim thay room code hop le trong URL. Hay dung link dang /1234', 'error');
+          return;
+        }
+
+        if (!token) {
+          setStatus('Chua co token. Hay gan window.aiToken hoac dan token vao o nhap.', 'error');
+          return;
+        }
+
+        setStatus(`Dang publish token len room ${roomCode}...`);
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (relaySecret) {
+          headers['X-Relay-Secret'] = relaySecret;
+        }
+
+        const response = await fetch(`${workerBase}/publish-token/${roomCode}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            token,
+            provider: 'ai.studio',
+            long: roomCode,
+          }),
+        });
+
+        const text = await response.text();
+        if (!response.ok) {
+          setStatus(`Publish that bai (${response.status})\n${text}`, 'error');
+          return;
+        }
+
+        setStatus(`Publish thanh cong cho room ${roomCode}\n${text}`, 'ok');
+      }
+
+      function toggleAutoPublish() {
+        if (autoTimer) {
+          window.clearInterval(autoTimer);
+          autoTimer = null;
+          autoBtn.textContent = 'Auto publish moi 45 giay';
+          setStatus('Da tat auto publish.');
+          return;
+        }
+
+        autoTimer = window.setInterval(() => {
+          publishToken().catch((error) => {
+            setStatus(`Auto publish loi: ${error instanceof Error ? error.message : String(error)}`, 'error');
+          });
+        }, 45000);
+
+        autoBtn.textContent = 'Tat auto publish';
+        setStatus('Da bat auto publish moi 45 giay.');
+        publishToken().catch((error) => {
+          setStatus(`Auto publish loi: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        });
+      }
+
+      roomCodeInput.value = getRoomCodeFromUrl();
+
+      publishBtn.addEventListener('click', () => {
+        publishToken().catch((error) => {
+          setStatus(`Publish loi: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        });
+      });
+
+      autoBtn.addEventListener('click', toggleAutoPublish);
+
+      if (roomCodeInput.value && findToken()) {
+        publishToken().catch((error) => {
+          setStatus(`Khoi tao auto publish loi: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        });
+      } else {
+        setStatus('San sang. Hay mo trang voi URL dang /1234 va cung cap token.');
+      }
+    </script>
+  </body>
+</html>
