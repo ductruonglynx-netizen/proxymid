@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Studio Provider Bridge</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --panel: rgba(15, 23, 42, 0.9);
+        --border: rgba(148, 163, 184, 0.22);
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --success: #22c55e;
+        --danger: #fb7185;
+        --warn: #f59e0b;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 24px;
+        display: grid;
+        place-items: center;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 34%),
+          radial-gradient(circle at top left, rgba(34, 197, 94, 0.14), transparent 28%),
+          linear-gradient(180deg, #020617 0%, #0f172a 100%);
+      }
+
+      .card {
+        width: min(860px, 100%);
+        padding: 24px;
+        border-radius: 24px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(16px);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 30px;
+      }
+
+      p {
+        margin: 0 0 16px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      @media (max-width: 720px) {
+        .grid.two {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 14px;
+      }
+
+      input,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.72);
+        color: var(--text);
+      }
+
+      textarea {
+        min-height: 140px;
+        resize: vertical;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: var(--accent);
+        color: #082f49;
+      }
+
+      button.secondary {
+        background: rgba(148, 163, 184, 0.18);
+        color: var(--text);
+      }
+
+      .status {
+        margin-top: 16px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.48);
+        white-space: pre-wrap;
+      }
+
+      .status.ok { border-color: rgba(34, 197, 94, 0.42); color: #dcfce7; }
+      .status.warn { border-color: rgba(245, 158, 11, 0.42); color: #fde68a; }
+      .status.error { border-color: rgba(251, 113, 133, 0.42); color: #fecdd3; }
+
+      .logs {
+        margin-top: 18px;
+        padding: 14px;
+        min-height: 220px;
+        max-height: 320px;
+        overflow: auto;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.62);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+
+      .hint {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      code { color: #bfdbfe; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>AI Studio Provider Bridge</h1>
+      <p>
+        Ban nay ket noi WebSocket toi Proxymid voi <code>role=provider</code>, trim token,
+        kiem tra regex <code>AIza...</code> / <code>ya29...</code>, sau do gui dong thoi
+        <code>token</code> va <code>TOKEN_TRANSFER</code>.
+      </p>
+
+      <div class="grid two">
+        <label>
+          Worker base
+          <input id="workerBase" value="https://proxymid.ductruong-lynx.workers.dev" />
+        </label>
+
+        <label>
+          Room code
+          <input id="roomCode" />
+        </label>
+      </div>
+
+      <div class="grid two" style="margin-top: 12px">
+        <label>
+          Provider label
+          <input id="providerLabel" value="ai.studio" />
+        </label>
+
+        <label>
+          Auto resend (giay)
+          <input id="autoSeconds" type="number" min="10" value="45" />
+        </label>
+      </div>
+
+      <label style="margin-top: 12px">
+        Token
+        <textarea id="tokenInput" placeholder="De trong neu app da co window.aiToken, window.AI_TOKEN, window.accessToken, window.apiKey hoac localStorage ai_token"></textarea>
+      </label>
+
+      <div class="row">
+        <button id="connectBtn" class="primary">Connect provider</button>
+        <button id="sendBtn" class="secondary">Send token now</button>
+        <button id="autoBtn" class="secondary">Enable auto resend</button>
+      </div>
+
+      <div id="status" class="status">Dang khoi tao...</div>
+      <div class="logs" id="logs"></div>
+      <p class="hint">Neu log bao "Backend assigned Client role", hay dong cac tab cu va doi ma phong moi.</p>
+    </main>
+
+    <script>
+      const workerBaseInput = document.getElementById('workerBase');
+      const roomCodeInput = document.getElementById('roomCode');
+      const providerLabelInput = document.getElementById('providerLabel');
+      const autoSecondsInput = document.getElementById('autoSeconds');
+      const tokenInput = document.getElementById('tokenInput');
+      const connectBtn = document.getElementById('connectBtn');
+      const sendBtn = document.getElementById('sendBtn');
+      const autoBtn = document.getElementById('autoBtn');
+      const statusBox = document.getElementById('status');
+      const logsBox = document.getElementById('logs');
+
+      const GEMINI_KEY_RE = /^AIza[0-9A-Za-z\-_]{20,}$/;
+      const OAUTH_TOKEN_RE = /^ya29\.[0-9A-Za-z\-_.]+$/;
+
+      let socket = null;
+      let autoTimer = null;
+
+      function now() {
+        return new Date().toLocaleTimeString('vi-VN', { hour12: false });
+      }
+
+      function log(message) {
+        logsBox.textContent += `[${now()}] ${message}\n`;
+        logsBox.scrollTop = logsBox.scrollHeight;
+      }
+
+      function setStatus(message, kind = '') {
+        statusBox.textContent = message;
+        statusBox.className = `status ${kind}`.trim();
+      }
+
+      function getRoomCodeFromUrl() {
+        const first = window.location.pathname.split('/').filter(Boolean)[0] || '';
+        return /^\d{4,8}$/.test(first) ? first : '';
+      }
+
+      function findToken() {
+        const manual = tokenInput.value.trim();
+        if (manual) return manual.replace(/^Bearer\s+/i, '').trim();
+
+        const globalCandidates = [
+          window.aiToken,
+          window.AI_TOKEN,
+          window.accessToken,
+          window.ACCESS_TOKEN,
+          window.apiKey,
+          window.API_KEY,
+        ];
+
+        for (const candidate of globalCandidates) {
+          const value = String(candidate || '').replace(/^Bearer\s+/i, '').trim();
+          if (value) return value;
+        }
+
+        const storageKeys = ['ai_token', 'access_token', 'api_key'];
+        for (const key of storageKeys) {
+          const value = String(localStorage.getItem(key) || '').replace(/^Bearer\s+/i, '').trim();
+          if (value) return value;
+        }
+
+        return '';
+      }
+
+      function validateToken(token) {
+        const clean = String(token || '').replace(/^Bearer\s+/i, '').trim();
+        if (!clean) {
+          return { ok: false, token: '', reason: 'Chua co token.' };
+        }
+        if (GEMINI_KEY_RE.test(clean) || OAUTH_TOKEN_RE.test(clean)) {
+          return { ok: true, token: clean, reason: '' };
+        }
+        return {
+          ok: false,
+          token: clean,
+          reason: 'Token khong dung regex AIza... hoac ya29.... Backend co the se bo qua.',
+        };
+      }
+
+      function buildProviderWsUrl() {
+        const workerBase = workerBaseInput.value.trim().replace(/\/+$/, '');
+        const roomCode = roomCodeInput.value.trim();
+        if (!/^\d{4,8}$/.test(roomCode)) {
+          throw new Error('Room code phai la 4-8 so.');
+        }
+        const wsBase = workerBase.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
+        return `${wsBase}/${roomCode}?role=provider`;
+      }
+
+      function ensureConnected() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          throw new Error('Bridge chua ket noi provider WebSocket.');
+        }
+      }
+
+      function sendTokenPayload() {
+        ensureConnected();
+
+        const roomCode = roomCodeInput.value.trim();
+        const provider = providerLabelInput.value.trim() || 'ai.studio';
+        const validation = validateToken(findToken());
+
+        if (!validation.ok) {
+          setStatus(validation.reason, 'error');
+          log(`Canh bao: ${validation.reason}`);
+          throw new Error(validation.reason);
+        }
+
+        const basePayload = {
+          code: roomCode,
+          long: roomCode,
+          token: validation.token,
+          provider,
+        };
+
+        log('Preparing payload for Relay Server...');
+        socket.send(JSON.stringify({ type: 'token', ...basePayload }));
+        socket.send(JSON.stringify({ type: 'TOKEN_TRANSFER', ...basePayload }));
+        log('Sending token data to relay...');
+        setStatus(`Da gui token cho room ${roomCode}.`, 'ok');
+      }
+
+      function connectProvider() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          log('Provider socket dang mo, bo qua connect moi.');
+          return;
+        }
+
+        const wsUrl = buildProviderWsUrl();
+        log(`Dang ket noi provider socket: ${wsUrl}`);
+        setStatus('Dang mo provider WebSocket...', 'warn');
+
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+          log('Provider WebSocket connected.');
+          setStatus('Provider WebSocket da ket noi.', 'ok');
+        };
+
+        socket.onmessage = (event) => {
+          log(`Relay message: ${String(event.data || '')}`);
+
+          let data = null;
+          try {
+            data = JSON.parse(String(event.data || ''));
+          } catch {
+            return;
+          }
+
+          if (data?.type === 'system' && data?.event === 'provider_connected') {
+            setStatus(`Backend da xac nhan role provider cho room ${data.code || roomCodeInput.value.trim()}.`, 'ok');
+            return;
+          }
+
+          if (data?.type === 'system' && data?.event === 'client_connected') {
+            setStatus('Da co client (TruyenForge) vao phong. Ban co the gui token.', 'ok');
+            return;
+          }
+
+          if (data?.type === 'system' && data?.event === 'publish_denied') {
+            setStatus(`Publish bi tu choi: ${data.message || 'Unknown error'}`, 'error');
+            return;
+          }
+
+          if (data?.type === 'system' && data?.event === 'client_connected' && data?.role === 'client') {
+            setStatus('Backend da gan vai client. TruyenForge co the dang chiem provider role.', 'error');
+            return;
+          }
+        };
+
+        socket.onerror = () => {
+          log('Provider WebSocket error.');
+          setStatus('Provider WebSocket gap loi.', 'error');
+        };
+
+        socket.onclose = () => {
+          log('Provider WebSocket closed.');
+          setStatus('Provider WebSocket da dong.', 'warn');
+          socket = null;
+        };
+      }
+
+      function toggleAutoResend() {
+        if (autoTimer) {
+          clearInterval(autoTimer);
+          autoTimer = null;
+          autoBtn.textContent = 'Enable auto resend';
+          setStatus('Da tat auto resend.', 'warn');
+          return;
+        }
+
+        const seconds = Math.max(10, Number(autoSecondsInput.value || 45));
+        autoTimer = setInterval(() => {
+          try {
+            sendTokenPayload();
+          } catch (error) {
+            log(`Auto resend loi: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }, seconds * 1000);
+
+        autoBtn.textContent = 'Disable auto resend';
+        setStatus(`Da bat auto resend moi ${seconds} giay.`, 'ok');
+      }
+
+      roomCodeInput.value = getRoomCodeFromUrl();
+      setStatus('San sang. Connect provider truoc, sau do send token.', 'warn');
+      log('Bridge khoi tao xong.');
+
+      connectBtn.addEventListener('click', () => {
+        try {
+          connectProvider();
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error), 'error');
+          log(`Connect loi: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      });
+
+      sendBtn.addEventListener('click', () => {
+        try {
+          sendTokenPayload();
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error), 'error');
+          log(`Send loi: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      });
+
+      autoBtn.addEventListener('click', toggleAutoResend);
+    </script>
+  </body>
+</html>

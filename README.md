@@ -111,6 +111,7 @@ const roomCode = window.location.pathname.split('/').filter(Boolean)[0] || '';
 Neu ban muon mot ban mau day du co giao dien nho de test va debug, xem:
 
 - `examples/ai-studio-room-publisher.html`
+- `examples/ai-studio-provider-bridge.html`
 
 ## Vi du tich hop TruyenForge
 
